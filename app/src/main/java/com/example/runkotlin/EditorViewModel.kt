@@ -3,7 +3,6 @@ package com.example.runkotlin
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
-import com.example.runkotlin.utils.CompilationResult
 
 data class DocumentStats(
     val lines: Int,

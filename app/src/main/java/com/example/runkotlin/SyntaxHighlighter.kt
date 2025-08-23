@@ -228,38 +228,6 @@ class SyntaxHighlighter(private val context: Context) {
 
             while (matcher.find()) {
                 spannable.setSpan(
-                    ForegroundColorSpan(commentColor),
-                    matcher.start(),
-                    matcher.end(),
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-            }
-        } else {
-            // Multi-line comments
-            val pattern = Pattern.compile("${Pattern.quote(config.commentStart)}.*?${Pattern.quote(config.commentEnd)}", Pattern.DOTALL)
-            val matcher = pattern.matcher(text)
-
-            while (matcher.find()) {
-                spannable.setSpan(
-                    ForegroundColorSpan(commentColor),
-                    matcher.start(),
-                    matcher.end(),
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
-            }
-        }
-    }
-
-    private fun highlightStrings(spannable: SpannableString, config: SyntaxConfig) {
-        val stringColor = Color.parseColor(config.colors.string)
-        val text = spannable.toString()
-
-        config.stringDelimiters.forEach { delimiter ->
-            val pattern = Pattern.compile("${Pattern.quote(delimiter)}.*?${Pattern.quote(delimiter)}")
-            val matcher = pattern.matcher(text)
-
-            while (matcher.find()) {
-                spannable.setSpan(
                     ForegroundColorSpan(stringColor),
                     matcher.start(),
                     matcher.end(),

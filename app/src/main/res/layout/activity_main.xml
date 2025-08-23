@@ -2,18 +2,135 @@
 <androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Hello World!"
-        app:layout_constraintBottom_toBottomOf="parent"
+    <!-- Toolbar -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="0dp"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        app:popupTheme="@style/ThemeOverlay.AppCompat.Light" />
+
+    <!-- Button Panel -->
+    <LinearLayout
+        android:id="@+id/buttonPanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="@color/design_default_color_surface"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/toolbar">
+
+        <Button
+            android:id="@+id/btn_compile"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
+            android:text="Compile"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_find"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_margin="4dp"
+            android:text="Find/Replace"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
+    <!-- Main Editor Area -->
+    <ScrollView
+        android:id="@+id/editorScrollView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_margin="8dp"
+        app:layout_constraintBottom_toTopOf="@id/compilationPanel"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/buttonPanel">
+
+        <EditText
+            android:id="@+id/editor_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@android:color/white"
+            android:fontFamily="monospace"
+            android:gravity="top|start"
+            android:hint="Enter your Kotlin code here..."
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:lineSpacingExtra="2dp"
+            android:padding="12dp"
+            android:scrollHorizontally="true"
+            android:textColor="@android:color/black"
+            android:textSize="14sp"
+            tools:ignore="Autofill" />
+
+    </ScrollView>
+
+    <!-- Compilation Status Panel -->
+    <LinearLayout
+        android:id="@+id/compilationPanel"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@color/design_default_color_surface"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@id/status_text"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <TextView
+            android:id="@+id/compilation_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Ready to compile"
+            android:textColor="@android:color/black"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="100dp"
+            android:layout_marginTop="4dp">
+
+            <TextView
+                android:id="@+id/error_output"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:fontFamily="monospace"
+                android:text=""
+                android:textColor="@android:color/holo_red_dark"
+                android:textSize="12sp" />
+
+        </ScrollView>
+
+    </LinearLayout>
+
+    <!-- Status Bar -->
+    <TextView
+        android:id="@+id/status_text"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="@color/design_default_color_primary"
+        android:padding="8dp"
+        android:text="Lines: 1 | Words: 0 | Characters: 0"
+        android:textColor="@android:color/white"
+        android:textSize="12sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

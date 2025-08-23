@@ -19,9 +19,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
-import com.texteditor.kotlinide.databinding.ActivityMainBinding
-import com.texteditor.kotlinide.models.EditorViewModel
-import com.texteditor.kotlinide.utils.*
+import com.example.runkotlin.databinding.ActivityMainBinding
 import java.io.File
 
 class MainActivity : AppCompatActivity() {

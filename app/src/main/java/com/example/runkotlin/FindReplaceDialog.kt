@@ -8,7 +8,8 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentManager
-import com.texteditor.kotlinide.databinding.DialogFindReplaceBinding
+import com.example.runkotlin.databinding.DialogFindReplaceBinding
+
 
 class FindReplaceDialog : DialogFragment() {
 
@@ -27,7 +28,7 @@ class FindReplaceDialog : DialogFragment() {
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = DialogFindReplaceBinding.inflate(inflater, container, false)
-        return binding.root
+        return binding.root  // Must return a View
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
