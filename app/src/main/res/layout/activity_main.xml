@@ -11,8 +11,9 @@
         android:id="@+id/toolbar"
         android:layout_width="0dp"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
+        android:background="@color/theme"
         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+        android:layout_marginTop="10dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
@@ -36,6 +37,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_margin="4dp"
+            android:backgroundTint="@color/theme"
             android:text="Compile"
             android:textSize="12sp" />
 
@@ -45,6 +47,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_margin="4dp"
+            android:backgroundTint="@color/theme"
             android:text="Find/Replace"
             android:textSize="12sp" />
 
@@ -124,11 +127,12 @@
         android:id="@+id/status_text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:background="@color/design_default_color_primary"
+        android:background="@color/theme"
         android:padding="8dp"
         android:text="Lines: 1 | Words: 0 | Characters: 0"
         android:textColor="@android:color/white"
         android:textSize="12sp"
+        android:layout_marginBottom="40dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent" />

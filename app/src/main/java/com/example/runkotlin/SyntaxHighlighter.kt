@@ -2,8 +2,10 @@ package com.example.runkotlin
 
 import android.content.Context
 import android.graphics.Color
-import android.text.SpannableString
+import android.text.Editable
+import android.text.SpannableStringBuilder
 import android.text.Spanned
+import android.text.TextWatcher
 import android.text.style.ForegroundColorSpan
 import android.widget.EditText
 import com.google.gson.Gson
@@ -31,6 +33,7 @@ class SyntaxHighlighter(private val context: Context) {
 
     private val syntaxConfigs = mutableMapOf<String, SyntaxConfig>()
     private val gson = Gson()
+    private var isHighlighting = false // Prevent infinite loops
 
     // Default Kotlin configuration
     private val kotlinConfig = SyntaxConfig(
@@ -138,36 +141,60 @@ class SyntaxHighlighter(private val context: Context) {
         }
     }
 
-    fun applySyntaxHighlighting(editText: EditText, fileExtension: String) {
+    // Extract file extension from filename
+    private fun getFileExtension(filename: String): String {
+        return filename.substringAfterLast('.', "").lowercase()
+    }
+
+    // Apply syntax highlighting with filename (extracts extension automatically)
+    fun applySyntaxHighlighting(editText: EditText, filename: String) {
+        val extension = getFileExtension(filename)
+        applySyntaxHighlightingByExtension(editText, extension)
+    }
+
+    // Apply syntax highlighting with direct extension
+    fun applySyntaxHighlightingByExtension(editText: EditText, fileExtension: String) {
+        if (isHighlighting) return // Prevent infinite loops
+
         val config = loadConfigurationFromFile(fileExtension) ?: return
-        val text = editText.text.toString()
+        val text = editText.text
 
         if (text.isEmpty()) return
 
-        val spannable = SpannableString(text)
+        isHighlighting = true
 
-        // Clear existing spans
-        val spans = spannable.getSpans(0, spannable.length, ForegroundColorSpan::class.java)
-        spans.forEach { spannable.removeSpan(it) }
+        try {
+            // Get current cursor position
+            val cursorPosition = editText.selectionStart
 
-        // Apply keyword highlighting
-        highlightKeywords(spannable, config)
+            // Work with the existing Editable instead of creating new SpannableString
+            val spannable = text as? SpannableStringBuilder ?: SpannableStringBuilder(text)
 
-        // Apply comment highlighting
-        highlightComments(spannable, config)
+            // Clear existing spans
+            val spans = spannable.getSpans(0, spannable.length, ForegroundColorSpan::class.java)
+            spans.forEach { spannable.removeSpan(it) }
 
-        // Apply string highlighting
-        highlightStrings(spannable, config)
+            // Apply syntax highlighting
+            highlightKeywords(spannable, config)
+            highlightComments(spannable, config)
+            highlightStrings(spannable, config)
+            highlightNumbers(spannable, config)
 
-        // Apply number highlighting
-        highlightNumbers(spannable, config)
+            // Only set text if it's different (avoid triggering TextWatcher)
+            if (editText.text.toString() != spannable.toString()) {
+                editText.text = spannable
+            }
 
-        // Set the highlighted text
-        editText.setText(spannable)
-        editText.setSelection(editText.text.length.coerceAtMost(editText.selectionStart))
+            // Restore cursor position
+            val safePosition = cursorPosition.coerceAtMost(editText.text.length)
+            editText.setSelection(safePosition)
+
+        } finally {
+            isHighlighting = false
+        }
     }
 
-    private fun highlightKeywords(spannable: SpannableString, config: SyntaxConfig) {
+    private fun highlightKeywords(spannable: SpannableStringBuilder, config: SyntaxConfig) {
         val keywordColor = Color.parseColor(config.colors.keyword)
 
         config.keywords.forEach { keyword ->
@@ -185,7 +212,7 @@ class SyntaxHighlighter(private val context: Context) {
         }
     }
 
-    private fun highlightComments(spannable: SpannableString, config: SyntaxConfig) {
+    private fun highlightComments(spannable: SpannableStringBuilder, config: SyntaxConfig) {
         val commentColor = Color.parseColor(config.colors.comment)
         val text = spannable.toString()
 
@@ -218,28 +245,45 @@ class SyntaxHighlighter(private val context: Context) {
         }
     }
 
-    private fun highlightStrings(spannable: SpannableString, config: SyntaxConfig) {
+    private fun highlightStrings(spannable: SpannableStringBuilder, config: SyntaxConfig) {
         val stringColor = Color.parseColor(config.colors.string)
         val text = spannable.toString()
 
         config.stringDelimiters.forEach { delimiter ->
-            val pattern = Pattern.compile("${Pattern.quote(delimiter)}.*?${Pattern.quote(delimiter)}")
-            val matcher = pattern.matcher(text)
-
-            while (matcher.find()) {
-                spannable.setSpan(
-                    ForegroundColorSpan(stringColor),
-                    matcher.start(),
-                    matcher.end(),
-                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-                )
+            when (delimiter.length) {
+                1 -> {
+                    // Single character delimiters like " or '
+                    val pattern = Pattern.compile("${Pattern.quote(delimiter)}(.*?)${Pattern.quote(delimiter)}")
+                    val matcher = pattern.matcher(text)
+                    while (matcher.find()) {
+                        spannable.setSpan(
+                            ForegroundColorSpan(stringColor),
+                            matcher.start(),
+                            matcher.end(),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                }
+                3 -> {
+                    // Triple quotes like """ or '''
+                    val pattern = Pattern.compile("${Pattern.quote(delimiter)}[\\s\\S]*?${Pattern.quote(delimiter)}")
+                    val matcher = pattern.matcher(text)
+                    while (matcher.find()) {
+                        spannable.setSpan(
+                            ForegroundColorSpan(stringColor),
+                            matcher.start(),
+                            matcher.end(),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                        )
+                    }
+                }
             }
         }
     }
 
-    private fun highlightNumbers(spannable: SpannableString, config: SyntaxConfig) {
+    private fun highlightNumbers(spannable: SpannableStringBuilder, config: SyntaxConfig) {
         val numberColor = Color.parseColor(config.colors.number)
-        val pattern = Pattern.compile("\\b\\d+(\\.\\d+)?\\b")
+        val pattern = Pattern.compile("\\b\\d+(\\.\\d+)?[fFdDlL]?\\b")
         val matcher = pattern.matcher(spannable)
 
         while (matcher.find()) {
@@ -258,5 +302,19 @@ class SyntaxHighlighter(private val context: Context) {
 
     fun getConfiguration(extension: String): SyntaxConfig? {
         return syntaxConfigs[extension]
+    }
+
+    // Create a TextWatcher for real-time syntax highlighting
+    fun createTextWatcher(editText: EditText, filename: String): TextWatcher {
+        return object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+            override fun afterTextChanged(s: Editable?) {
+                if (!isHighlighting) {
+                    applySyntaxHighlighting(editText, filename)
+                }
+            }
+        }
     }
 }

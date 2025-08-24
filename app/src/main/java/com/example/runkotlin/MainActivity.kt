@@ -32,9 +32,17 @@ class MainActivity : AppCompatActivity() {
     private lateinit var compilerManager: CompilerManager
 
     private var currentFile: File? = null
+    private var currentFilename: String = "Main.kt" // Default filename with .kt extension
     private var isTextChanged = false
     private var autoSaveHandler = Handler(Looper.getMainLooper())
     private var autoSaveRunnable: Runnable? = null
+    private var textWatcher: TextWatcher? = null
+
+    // Undo/Redo functionality
+    private val undoStack = java.util.Stack<String>()
+    private val redoStack = java.util.Stack<String>()
+    private var isUndoRedoOperation = false
+    private val maxUndoStackSize = 100
 
     private val openFileLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -44,6 +52,39 @@ class MainActivity : AppCompatActivity() {
                 openFileFromUri(uri)
             }
         }
+    }
+
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        // Handle keyboard shortcuts
+        if (event?.isCtrlPressed == true) {
+            when (keyCode) {
+                android.view.KeyEvent.KEYCODE_Z -> {
+                    if (event.isShiftPressed) {
+                        redo() // Ctrl+Shift+Z for redo
+                    } else {
+                        undo() // Ctrl+Z for undo
+                    }
+                    return true
+                }
+                android.view.KeyEvent.KEYCODE_Y -> {
+                    redo() // Ctrl+Y for redo
+                    return true
+                }
+                android.view.KeyEvent.KEYCODE_S -> {
+                    saveFile() // Ctrl+S for save
+                    return true
+                }
+                android.view.KeyEvent.KEYCODE_N -> {
+                    newFile() // Ctrl+N for new file
+                    return true
+                }
+                android.view.KeyEvent.KEYCODE_O -> {
+                    openFile() // Ctrl+O for open file
+                    return true
+                }
+            }
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     private val saveFileLauncher = registerForActivityResult(
@@ -70,6 +111,12 @@ class MainActivity : AppCompatActivity() {
 
         // Load default syntax highlighting configurations
         syntaxHighlighter.loadDefaultConfigurations()
+
+        // Apply initial syntax highlighting
+        applySyntaxHighlighting()
+
+        // Initialize undo stack with empty content
+        pushToUndoStack("")
     }
 
     private fun initializeComponents() {
@@ -90,28 +137,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
-        // Setup text editor
-        binding.editorText.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                isTextChanged = true
-                scheduleAutoSave()
-
-                // Update syntax highlighting
-                currentFile?.let { file ->
-                    val extension = file.extension
-                    syntaxHighlighter.applySyntaxHighlighting(binding.editorText, extension)
-                }
-
-                // Update document stats
-                s?.let { text ->
-                    viewModel.updateDocumentStats(text.toString())
-                }
-            }
-
-            override fun afterTextChanged(s: Editable?) {}
-        })
+        // Setup text editor with improved TextWatcher
+        setupTextWatcher()
 
         // Setup buttons
         binding.btnCompile.setOnClickListener {
@@ -120,6 +147,83 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnFind.setOnClickListener {
             showFindReplaceDialog()
+        }
+    }
+
+    private fun setupTextWatcher() {
+        // Remove existing TextWatcher if any
+        textWatcher?.let { binding.editorText.removeTextChangedListener(it) }
+
+        // Create new TextWatcher
+        textWatcher = object : TextWatcher {
+            private var isInternalChange = false
+            private var beforeText = ""
+
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {
+                if (!isInternalChange && !isUndoRedoOperation) {
+                    beforeText = s?.toString() ?: ""
+                }
+            }
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (!isInternalChange && !isUndoRedoOperation) {
+                    isTextChanged = true
+                    scheduleAutoSave()
+
+                    // Update document stats
+                    s?.let { text ->
+                        viewModel.updateDocumentStats(text.toString())
+                    }
+                }
+            }
+
+            override fun afterTextChanged(s: Editable?) {
+                if (!isInternalChange) {
+                    if (!isUndoRedoOperation) {
+                        // Push to undo stack if significant change
+                        val currentText = s?.toString() ?: ""
+                        if (beforeText != currentText && beforeText.isNotEmpty()) {
+                            pushToUndoStack(beforeText)
+                            redoStack.clear() // Clear redo stack when new edit is made
+                        }
+                    }
+
+                    isInternalChange = true
+                    // Apply syntax highlighting with current filename
+                    syntaxHighlighter.applySyntaxHighlighting(binding.editorText, currentFilename)
+                    isInternalChange = false
+                }
+            }
+        }
+
+        // Add the TextWatcher
+        binding.editorText.addTextChangedListener(textWatcher)
+    }
+
+    private fun applySyntaxHighlighting() {
+        syntaxHighlighter.applySyntaxHighlighting(binding.editorText, currentFilename)
+    }
+
+    private fun updateCurrentFilename(filename: String) {
+        // Ensure proper file extension
+        currentFilename = ensureProperExtension(filename)
+        title = currentFilename
+
+        // Re-setup TextWatcher with new filename for syntax highlighting
+        setupTextWatcher()
+
+        // Apply syntax highlighting immediately
+        applySyntaxHighlighting()
+    }
+
+    private fun ensureProperExtension(filename: String): String {
+        val cleanName = filename.substringBeforeLast('.')
+        val extension = filename.substringAfterLast('.', "")
+
+        return when {
+            extension.isEmpty() -> "$filename.kt" // Default to .kt if no extension
+            extension.lowercase() in listOf("kt", "kts", "java", "py", "js", "html", "css", "xml") -> filename
+            else -> "$cleanName.kt" // Replace unknown extensions with .kt
         }
     }
 
@@ -141,6 +245,13 @@ class MainActivity : AppCompatActivity() {
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
         return true
+    }
+
+    override fun onPrepareOptionsMenu(menu: Menu?): Boolean {
+        // Update menu items based on undo/redo stack states
+        menu?.findItem(R.id.action_undo)?.isEnabled = undoStack.isNotEmpty()
+        menu?.findItem(R.id.action_redo)?.isEnabled = redoStack.isNotEmpty()
+        return super.onPrepareOptionsMenu(menu)
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
@@ -200,17 +311,35 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun createNewFile() {
+        // Save current state to undo stack before clearing
+        val currentText = binding.editorText.text.toString()
+        if (currentText.isNotEmpty()) {
+            pushToUndoStack(currentText)
+        }
+
         binding.editorText.text.clear()
         currentFile = null
         isTextChanged = false
-        title = "New Document"
+        updateCurrentFilename("Main.kt") // Default to .kt extension
         binding.statusText.text = "Lines: 1 | Words: 0 | Characters: 0"
+
+        // Clear undo/redo stacks for new file
+        undoStack.clear()
+        redoStack.clear()
     }
 
     private fun openFile() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
+            // Add MIME types for common code files
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                "text/*",
+                "application/x-kotlin",
+                "application/javascript",
+                "application/java",
+                "text/x-python"
+            ))
         }
         openFileLauncher.launch(intent)
     }
@@ -218,21 +347,28 @@ class MainActivity : AppCompatActivity() {
     private fun openFileFromUri(uri: Uri) {
         try {
             val content = fileManager.readFileFromUri(uri)
-            binding.editorText.setText(content)
 
-            // Try to get file name from URI
-            val fileName = fileManager.getFileNameFromUri(uri) ?: "Unknown"
-            title = fileName
+            // Save current state before opening new file
+            val currentText = binding.editorText.text.toString()
+            if (currentText.isNotEmpty()) {
+                pushToUndoStack(currentText)
+            }
 
-            // Create temporary file for processing
-            currentFile = File(cacheDir, fileName)
+            setEditorText(content, pushUndo = false)
+
+            // Get file name from URI and ensure proper extension
+            val fileName = fileManager.getFileNameFromUri(uri) ?: "Unknown.kt"
+            updateCurrentFilename(fileName)
+
+            // Create temporary file for processing with proper extension
+            currentFile = File(cacheDir, currentFilename)
             currentFile?.writeText(content)
 
             isTextChanged = false
 
-            // Apply syntax highlighting based on file extension
-            val extension = fileName.substringAfterLast('.', "")
-            syntaxHighlighter.applySyntaxHighlighting(binding.editorText, extension)
+            // Clear undo/redo stacks for new file
+            undoStack.clear()
+            redoStack.clear()
 
             Toast.makeText(this, "File opened successfully", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
@@ -243,9 +379,21 @@ class MainActivity : AppCompatActivity() {
     private fun saveFile() {
         currentFile?.let { file ->
             try {
-                file.writeText(binding.editorText.text.toString())
+                // Ensure the file has the correct extension
+                val properFile = if (file.name != currentFilename) {
+                    File(file.parent, currentFilename).also { newFile ->
+                        if (file.exists() && file != newFile) {
+                            file.delete() // Remove old file with wrong extension
+                        }
+                        currentFile = newFile
+                    }
+                } else {
+                    file
+                }
+
+                properFile.writeText(binding.editorText.text.toString())
                 isTextChanged = false
-                Toast.makeText(this, "File saved", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "File saved as ${properFile.name}", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Toast.makeText(this, "Error saving file: ${e.message}", Toast.LENGTH_LONG).show()
             }
@@ -258,7 +406,7 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "text/plain"
-            putExtra(Intent.EXTRA_TITLE, "untitled.kt")
+            putExtra(Intent.EXTRA_TITLE, currentFilename) // Use current filename with proper extension
         }
         saveFileLauncher.launch(intent)
     }
@@ -268,14 +416,14 @@ class MainActivity : AppCompatActivity() {
             fileManager.writeFileToUri(uri, binding.editorText.text.toString())
             isTextChanged = false
 
-            val fileName = fileManager.getFileNameFromUri(uri) ?: "Unknown"
-            title = fileName
+            val fileName = fileManager.getFileNameFromUri(uri) ?: currentFilename
+            updateCurrentFilename(fileName)
 
-            // Create/update current file reference
-            currentFile = File(cacheDir, fileName)
+            // Create/update current file reference with proper extension
+            currentFile = File(cacheDir, currentFilename)
             currentFile?.writeText(binding.editorText.text.toString())
 
-            Toast.makeText(this, "File saved successfully", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "File saved successfully as $currentFilename", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(this, "Error saving file: ${e.message}", Toast.LENGTH_LONG).show()
         }
@@ -287,7 +435,13 @@ class MainActivity : AppCompatActivity() {
         autoSaveRunnable = Runnable {
             currentFile?.let { file ->
                 try {
-                    file.writeText(binding.editorText.text.toString())
+                    // Ensure auto-save uses correct filename
+                    val properFile = if (file.name != currentFilename) {
+                        File(file.parent, currentFilename).also { currentFile = it }
+                    } else {
+                        file
+                    }
+                    properFile.writeText(binding.editorText.text.toString())
                 } catch (e: Exception) {
                     // Ignore auto-save errors
                 }
@@ -313,13 +467,63 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun undo() {
-        // Basic undo functionality - you might want to implement a more sophisticated undo/redo system
-        Toast.makeText(this, "Undo functionality - implement with TextWatcher history", Toast.LENGTH_SHORT).show()
+        if (undoStack.isNotEmpty()) {
+            val current = binding.editorText.text.toString()
+            redoStack.push(current)
+            val last = undoStack.pop()
+            setEditorText(last, pushUndo = false)
+            Toast.makeText(this, "Undo applied", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Nothing to undo", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun redo() {
-        // Basic redo functionality
-        Toast.makeText(this, "Redo functionality - implement with TextWatcher history", Toast.LENGTH_SHORT).show()
+        if (redoStack.isNotEmpty()) {
+            val current = binding.editorText.text.toString()
+            undoStack.push(current)
+            val next = redoStack.pop()
+            setEditorText(next, pushUndo = false)
+            Toast.makeText(this, "Redo applied", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Nothing to redo", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun setEditorText(text: String, pushUndo: Boolean = true) {
+        if (pushUndo) {
+            pushToUndoStack(binding.editorText.text.toString())
+        }
+
+        isUndoRedoOperation = true
+        binding.editorText.setText(text)
+        binding.editorText.setSelection(text.length) // Move cursor to end
+        isUndoRedoOperation = false
+
+        // Apply syntax highlighting
+        applySyntaxHighlighting()
+    }
+
+    private fun pushToUndoStack(text: String) {
+        // Don't push empty strings or duplicates
+        if (text.isEmpty() || (undoStack.isNotEmpty() && undoStack.peek() == text)) {
+            return
+        }
+
+        undoStack.push(text)
+
+        // Limit stack size to prevent memory issues
+        if (undoStack.size > maxUndoStackSize) {
+            // Remove oldest entries
+            val newStack = java.util.Stack<String>()
+            val itemsToKeep = undoStack.takeLast(maxUndoStackSize / 2)
+            itemsToKeep.forEach { newStack.push(it) }
+            undoStack.clear()
+            undoStack.addAll(newStack)
+        }
+
+        // Update menu items
+        invalidateOptionsMenu()
     }
 
     private fun copy() {
@@ -369,7 +573,9 @@ class MainActivity : AppCompatActivity() {
         val cursorPosition = binding.editorText.selectionStart
         val currentText = binding.editorText.text.toString()
         val newText = currentText.substring(0, cursorPosition) + text + currentText.substring(cursorPosition)
-        binding.editorText.setText(newText)
+
+        // Use setEditorText to properly handle undo/redo
+        setEditorText(newText, pushUndo = true)
         binding.editorText.setSelection(cursorPosition + text.length)
     }
 
@@ -379,7 +585,9 @@ class MainActivity : AppCompatActivity() {
         if (start != end) {
             val currentText = binding.editorText.text.toString()
             val newText = currentText.substring(0, start) + currentText.substring(end)
-            binding.editorText.setText(newText)
+
+            // Use setEditorText to properly handle undo/redo
+            setEditorText(newText, pushUndo = true)
             binding.editorText.setSelection(start)
         }
     }
@@ -393,23 +601,51 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun compileCurrentFile() {
-        currentFile?.let { file ->
-            if (file.extension == "kt") {
-                binding.btnCompile.isEnabled = false
-                binding.btnCompile.text = "Compiling..."
+        // Ensure file has .kt extension before compilation
+        if (!currentFilename.endsWith(".kt", ignoreCase = true)) {
+            AlertDialog.Builder(this)
+                .setTitle("File Extension")
+                .setMessage("Kotlin compilation requires a .kt file extension. Change filename to ${currentFilename.substringBeforeLast('.')}.kt?")
+                .setPositiveButton("Change") { _, _ ->
+                    updateCurrentFilename("${currentFilename.substringBeforeLast('.')}.kt")
+                    performCompilation()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+            return
+        }
 
-                compilerManager.compileKotlinFile(file) { result ->
-                    runOnUiThread {
-                        binding.btnCompile.isEnabled = true
-                        binding.btnCompile.text = "Compile"
-                        viewModel.setCompilationResult(result)
-                    }
+        performCompilation()
+    }
+
+    private fun performCompilation() {
+        currentFile?.let { file ->
+            // Ensure current file matches current filename
+            val actualFile = if (file.name != currentFilename) {
+                File(file.parent, currentFilename).also { newFile ->
+                    newFile.writeText(binding.editorText.text.toString())
+                    currentFile = newFile
                 }
             } else {
-                Toast.makeText(this, "Only Kotlin files (.kt) can be compiled", Toast.LENGTH_SHORT).show()
+                file.apply { writeText(binding.editorText.text.toString()) }
+            }
+
+            binding.btnCompile.isEnabled = false
+            binding.btnCompile.text = "Compiling..."
+
+            compilerManager.compileKotlinFile(actualFile) { result ->
+                runOnUiThread {
+                    binding.btnCompile.isEnabled = true
+                    binding.btnCompile.text = "Compile"
+                    viewModel.setCompilationResult(result)
+                }
             }
         } ?: run {
-            Toast.makeText(this, "Please save the file first", Toast.LENGTH_SHORT).show()
+            // Create a temporary file for compilation
+            val tempFile = File(cacheDir, currentFilename)
+            tempFile.writeText(binding.editorText.text.toString())
+            currentFile = tempFile
+            performCompilation()
         }
     }
 

@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 
@@ -57,4 +58,45 @@ class FileManager(private val context: Context) {
 
         return result
     }
+
+    fun saveKotlinFile(filename: String, content: String): Boolean {
+        return try {
+            // Ensure .kt extension
+            val kotlinFilename = ensureKotlinExtension(filename)
+
+            val file = File(getKotlinFilesDirectory(), kotlinFilename)
+            file.writeText(content)
+
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun ensureKotlinExtension(filename: String): String {
+        return when {
+            filename.endsWith(".kt", ignoreCase = true) -> filename
+            filename.endsWith(".kts", ignoreCase = true) -> filename
+            else -> "$filename.kt"
+        }
+    }
+
+    fun getKotlinFilesDirectory(): File {
+        val kotlinDir = File(context.filesDir, "kotlin_files")
+        if (!kotlinDir.exists()) {
+            kotlinDir.mkdirs()
+        }
+        return kotlinDir
+    }
+
+    fun getFileExtension(filename: String): String {
+        return filename.substringAfterLast('.', "")
+    }
+
+    fun isKotlinFile(filename: String): Boolean {
+        val extension = getFileExtension(filename).lowercase()
+        return extension == "kt" || extension == "kts"
+    }
+
+
 }
