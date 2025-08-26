@@ -25,7 +25,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="8dp"
+        android:padding="12dp"
         android:background="@color/design_default_color_surface"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -36,20 +36,38 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_margin="4dp"
+            android:layout_marginEnd="4dp"
             android:backgroundTint="@color/theme"
             android:text="Compile"
-            android:textSize="12sp" />
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:minHeight="48dp" />
+
+        <Button
+            android:id="@+id/btnRun"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="@color/theme"
+            android:text="Run"
+            android:textColor="@color/white"
+            android:enabled="false"
+            android:textSize="12sp"
+            android:minHeight="48dp" />
 
         <Button
             android:id="@+id/btn_find"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_margin="4dp"
+            android:layout_marginStart="4dp"
             android:backgroundTint="@color/theme"
             android:text="Find/Replace"
-            android:textSize="12sp" />
+            android:textColor="@color/white"
+            android:textSize="12sp"
+            android:minHeight="48dp" />
 
     </LinearLayout>
 

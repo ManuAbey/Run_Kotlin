@@ -148,6 +148,14 @@ class MainActivity : AppCompatActivity() {
         binding.btnFind.setOnClickListener {
             showFindReplaceDialog()
         }
+
+        // Add run button if it exists in your layout
+        binding.btnRun?.setOnClickListener {
+            runCurrentFile()
+        }
+
+        // Test Kotlin environment on startup
+        testKotlinEnvironment()
     }
 
     private fun setupTextWatcher() {
@@ -296,6 +304,18 @@ class MainActivity : AppCompatActivity() {
                 showSyntaxConfigDialog()
                 true
             }
+            R.id.action_run -> {
+                runCurrentFile()
+                true
+            }
+            R.id.action_compile_run -> {
+                compileAndRunCurrentFile()
+                true
+            }
+            R.id.action_online_compile -> {
+                compileOnline()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
     }
@@ -332,17 +352,11 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "*/*"
-            // Add MIME types for common code files
-            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
-                "text/*",
-                "application/x-kotlin",
-                "application/javascript",
-                "application/java",
-                "text/x-python"
-            ))
+
         }
         openFileLauncher.launch(intent)
     }
+
 
     private fun openFileFromUri(uri: Uri) {
         try {
@@ -649,23 +663,305 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun runCurrentFile() {
+        currentFile?.let { file ->
+            val actualFile = if (file.name != currentFilename) {
+                File(file.parent, currentFilename)
+            } else {
+                file
+            }
+
+            val jarFile = File(File(cacheDir, "compiled"), "${actualFile.nameWithoutExtension}.jar")
+
+            if (!jarFile.exists()) {
+                Toast.makeText(this, "Please compile the file first", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            binding.btnRun?.let { btn ->
+                btn.isEnabled = false
+                btn.text = "Running..."
+            }
+
+            binding.errorOutput.text = "Running program..."
+
+            compilerManager.runKotlinFile(actualFile) { statusMessage, output ->
+                runOnUiThread {
+                    binding.btnRun?.let { btn ->
+                        btn.isEnabled = true
+                        btn.text = "Run"
+                    }
+                    binding.errorOutput.text = buildString {
+                        appendLine("Status: $statusMessage")
+                        if (output.isNotEmpty()) {
+                            appendLine("Program Output:\n$output")
+                        }
+                    }
+                }
+            }
+
+        } ?: run {
+            Toast.makeText(this, "No file to run", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun testKotlinEnvironment() {
+        compilerManager.testKotlinEnvironment { isWorking, message ->
+            runOnUiThread {
+                if (!isWorking) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Kotlin Environment")
+                        .setMessage("Kotlin compiler might not be installed or configured properly.\n\nError: $message\n\nYou can still write code, but compilation might not work.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
+            }
+        }
+    }
+
+    private fun compileAndRunCurrentFile() {
+        // Ensure file has .kt extension before compilation
+        if (!currentFilename.endsWith(".kt", ignoreCase = true)) {
+            AlertDialog.Builder(this)
+                .setTitle("File Extension")
+                .setMessage("Kotlin compilation requires a .kt file extension. Change filename to ${currentFilename.substringBeforeLast('.')}.kt?")
+                .setPositiveButton("Change") { _, _ ->
+                    updateCurrentFilename("${currentFilename.substringBeforeLast('.')}.kt")
+                    performCompileAndRun()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+            return
+        }
+
+        performCompileAndRun()
+    }
+
+    private fun performCompileAndRun() {
+        currentFile?.let { file ->
+            val actualFile = if (file.name != currentFilename) {
+                File(file.parent, currentFilename).also { newFile ->
+                    newFile.writeText(binding.editorText.text.toString())
+                    currentFile = newFile
+                }
+            } else {
+                file.apply { writeText(binding.editorText.text.toString()) }
+            }
+
+            binding.btnCompile.isEnabled = false
+            binding.btnCompile.text = "Compiling & Running..."
+            binding.errorOutput.text = "Compiling..."
+
+            // Use the enhanced compileAndRunKotlinFile method
+            compilerManager.compileAndRunKotlinFile(actualFile) { result ->
+                runOnUiThread {
+                    binding.btnCompile.isEnabled = true
+                    binding.btnCompile.text = "Compile"
+
+                    when (result.status) {
+                        CompilationStatus.SUCCESS -> {
+                            binding.compilationStatus.text = "✓ Compilation and execution successful"
+                            binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+
+                            // Show both compilation and execution output
+                            binding.errorOutput.text = buildString {
+                                if (result.output.isNotEmpty()) {
+                                    appendLine("Compilation: ${result.output}")
+                                }
+                                if (result.executionOutput.isNotEmpty()) {
+                                    appendLine("Program Output:")
+                                    appendLine(result.executionOutput)
+                                } else {
+                                    appendLine("Program executed successfully (no output)")
+                                }
+                                if (result.compilationTime > 0) {
+                                    appendLine("Time: ${result.compilationTime}ms")
+                                }
+                            }
+                        }
+                        CompilationStatus.ERROR -> {
+                            binding.compilationStatus.text = "✗ Compilation/execution failed"
+                            binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
+
+                            binding.errorOutput.text = buildString {
+                                if (result.output.isNotEmpty()) {
+                                    appendLine("Error: ${result.output}")
+                                }
+                                if (result.executionOutput.isNotEmpty()) {
+                                    appendLine("Execution Output:")
+                                    appendLine(result.executionOutput)
+                                }
+                            }
+                        }
+                        CompilationStatus.TIMEOUT -> {
+                            binding.compilationStatus.text = "⚠ Compilation/execution timeout"
+                            binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_dark))
+                            binding.errorOutput.text = "Operation took too long and was cancelled"
+                        }
+                        CompilationStatus.RUNNING -> {
+                            binding.compilationStatus.text = "⏳ Processing..."
+                            binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
+                            binding.errorOutput.text = "Processing your code..."
+                        }
+                    }
+                }
+            }
+        } ?: run {
+            // Create a temporary file for compilation
+            val tempFile = File(cacheDir, currentFilename)
+            tempFile.writeText(binding.editorText.text.toString())
+            currentFile = tempFile
+            performCompileAndRun()
+        }
+    }
+
+    private fun compileOnline() {
+        val code = binding.editorText.text.toString()
+        if (code.isEmpty()) {
+            Toast.makeText(this, "Please write some code first", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        binding.errorOutput.text = "Compiling and running online..."
+        binding.compilationStatus.text = "⏳ Online compilation running..."
+        binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
+
+        compilerManager.executeCodeDirectly(code) { result ->
+            runOnUiThread {
+                when (result.status) {
+                    CompilationStatus.SUCCESS -> {
+                        binding.compilationStatus.text = "✓ Online execution successful"
+                        binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+
+                        binding.errorOutput.text = buildString {
+                            appendLine("Online Execution Result:")
+                            if (result.executionOutput.isNotEmpty()) {
+                                appendLine("Output:")
+                                appendLine(result.executionOutput)
+                            } else {
+                                appendLine("Program executed successfully (no output)")
+                            }
+                            if (result.executionTime > 0) {
+                                appendLine("Execution Time: ${result.executionTime}ms")
+                            }
+                        }
+                    }
+                    CompilationStatus.ERROR -> {
+                        binding.compilationStatus.text = "✗ Online execution failed"
+                        binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
+
+                        binding.errorOutput.text = buildString {
+                            appendLine("Online Execution Error:")
+                            if (result.output.isNotEmpty()) {
+                                appendLine(result.output)
+                            }
+                            if (result.executionOutput.isNotEmpty()) {
+                                appendLine("Additional Details:")
+                                appendLine(result.executionOutput)
+                            }
+                        }
+                    }
+                    CompilationStatus.TIMEOUT -> {
+                        binding.compilationStatus.text = "⚠ Online execution timeout"
+                        binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_dark))
+                        binding.errorOutput.text = "Online execution took too long and was cancelled"
+                    }
+                    else -> {
+                        binding.compilationStatus.text = "⚠ Online execution issue"
+                        binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_dark))
+                        binding.errorOutput.text = "Online execution encountered an issue: ${result.output}"
+                    }
+                }
+            }
+        }
+    }
+
+
     private fun updateCompilationStatus(result: CompilationResult) {
         when (result.status) {
             CompilationStatus.SUCCESS -> {
                 binding.compilationStatus.text = "✓ Compilation successful"
                 binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
-                binding.errorOutput.text = ""
+
+                // Show both compilation and execution output properly
+                binding.errorOutput.text = buildString {
+                    if (result.output.isNotEmpty()) {
+                        appendLine("Compilation: ${result.output}")
+                    }
+                    if (result.executionOutput.isNotEmpty()) {
+                        appendLine("Program Output:")
+                        appendLine(result.executionOutput)
+                    } else {
+                        appendLine("Compiled successfully. Click 'Run' to execute the program.")
+                    }
+                    if (result.compilationTime > 0) {
+                        appendLine("Compilation Time: ${result.compilationTime}ms")
+                    }
+                }
             }
             CompilationStatus.ERROR -> {
                 binding.compilationStatus.text = "✗ Compilation failed"
                 binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
-                binding.errorOutput.text = result.output
+
+                binding.errorOutput.text = buildString {
+                    appendLine("Compilation Errors:")
+                    appendLine(result.output)
+                    if (result.executionOutput.isNotEmpty()) {
+                        appendLine("Additional Details:")
+                        appendLine(result.executionOutput)
+                    }
+                }
             }
             CompilationStatus.TIMEOUT -> {
                 binding.compilationStatus.text = "⚠ Compilation timeout"
                 binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_orange_dark))
-                binding.errorOutput.text = "Compilation took too long"
+                binding.errorOutput.text = "Compilation took too long and was cancelled"
+            }
+            CompilationStatus.RUNNING -> {
+                binding.compilationStatus.text = " Compilation running..."
+                binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_blue_dark))
+                binding.errorOutput.text = "Compiling your code..."
             }
         }
     }
+
+    private fun runCompiledProgram() {
+        currentFile?.let { file ->
+            val kotlinFile = if (file.name != currentFilename) {
+                File(file.parent, currentFilename)
+            } else {
+                file
+            }
+
+            binding.errorOutput.text = "Running compiled program..."
+
+            // Run the compiled Kotlin program
+            compilerManager.runKotlinFile(kotlinFile) { statusMessage, output ->
+                runOnUiThread {
+                    // Display status and output clearly
+                    binding.errorOutput.text = buildString {
+                        appendLine("Execution Status: $statusMessage")
+                        if (output.isNotEmpty()) {
+                            appendLine("Program Output:")
+                            appendLine(output)
+                        } else {
+                            appendLine("Program executed successfully (no output)")
+                        }
+                    }
+
+                    // Update compilation status to show execution complete
+                    if (output.contains("error", ignoreCase = true)) {
+                        binding.compilationStatus.text = "✗ Execution failed"
+                        binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_red_dark))
+                    } else {
+                        binding.compilationStatus.text = "✓ Execution completed"
+                        binding.compilationStatus.setTextColor(ContextCompat.getColor(this, android.R.color.holo_green_dark))
+                    }
+                }
+            }
+        } ?: run {
+            binding.errorOutput.text = "No compiled file found. Please compile first."
+        }
+    }
+
 }

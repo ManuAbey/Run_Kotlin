@@ -51,4 +51,10 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.gson)
     implementation(libs.documentfile)
+    implementation(libs.okhttp)
+    implementation(libs.json)
+
+    implementation (libs.kotlinx.coroutines.android)
+    implementation (libs.kotlinx.coroutines.core)
+
 }

@@ -55,6 +55,21 @@
             app:showAsAction="never" />
     </group>
 
+    <item
+        android:id="@+id/action_run"
+        android:title="Run"
+        android:icon="@drawable/ic_play" />
+
+    <item
+        android:id="@+id/action_compile_run"
+        android:title="Compile and Run"
+        android:icon="@drawable/ic_compile_run" />
+
+    <item
+        android:id="@+id/action_online_compile"
+        android:title="Online Compile"
+        android:icon="@drawable/ic_cloud" />
+
     <!-- Settings Menu -->
     <item
         android:id="@+id/action_syntax_config"
