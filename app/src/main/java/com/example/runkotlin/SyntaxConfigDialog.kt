@@ -127,8 +127,15 @@ class SyntaxConfigDialog : DialogFragment() {
             )
 
             // Use language name as file extension for saving
-            val extension = languageName.lowercase().replace(" ", "")
-            syntaxHighlighter.saveConfigurationToFile(extension, config)
+            val selectedExtension = binding.spinnerLanguage.selectedItem as String
+            syntaxHighlighter.saveConfigurationToFile(selectedExtension, config)
+
+            activity?.let { activity ->
+                if (activity is MainActivity) {
+                    // Trigger re-highlighting with current filename
+                    activity.refreshSyntaxHighlighting()
+                }
+            }
 
             Toast.makeText(context, "Configuration saved successfully", Toast.LENGTH_SHORT).show()
             dismiss()

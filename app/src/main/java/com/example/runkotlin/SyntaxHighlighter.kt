@@ -116,10 +116,13 @@ class SyntaxHighlighter(private val context: Context) {
         return if (configFile.exists()) {
             try {
                 val json = configFile.readText()
-                gson.fromJson(json, SyntaxConfig::class.java)
+                val config = gson.fromJson(json, SyntaxConfig::class.java)
+                // Update in-memory cache
+                syntaxConfigs[extension] = config
+                config
             } catch (e: Exception) {
                 e.printStackTrace()
-                null
+                syntaxConfigs[extension] // fallback to cached version
             }
         } else {
             syntaxConfigs[extension]
@@ -195,8 +198,11 @@ class SyntaxHighlighter(private val context: Context) {
     }
 
     private fun highlightKeywords(spannable: SpannableStringBuilder, config: SyntaxConfig) {
-        val keywordColor = Color.parseColor(config.colors.keyword)
-
+        val keywordColor = try {
+            Color.parseColor(config.colors.keyword)
+        } catch (e: Exception) {
+            Color.parseColor("#FF9800") // fallback to default orange
+        }
         config.keywords.forEach { keyword ->
             val pattern = Pattern.compile("\\b$keyword\\b")
             val matcher = pattern.matcher(spannable)
@@ -213,7 +219,11 @@ class SyntaxHighlighter(private val context: Context) {
     }
 
     private fun highlightComments(spannable: SpannableStringBuilder, config: SyntaxConfig) {
-        val commentColor = Color.parseColor(config.colors.comment)
+        val commentColor = try {
+            Color.parseColor(config.colors.comment)
+        } catch (e: Exception) {
+            Color.parseColor("#4caf50")
+        }
         val text = spannable.toString()
 
         if (config.commentEnd.isEmpty()) {
@@ -246,7 +256,13 @@ class SyntaxHighlighter(private val context: Context) {
     }
 
     private fun highlightStrings(spannable: SpannableStringBuilder, config: SyntaxConfig) {
-        val stringColor = Color.parseColor(config.colors.string)
+        val stringColor = try {
+            Color.parseColor(config.colors.string)
+        } catch (e: Exception) {
+            Color.parseColor("#2196f3")
+        }
+
+
         val text = spannable.toString()
 
         config.stringDelimiters.forEach { delimiter ->
@@ -282,7 +298,12 @@ class SyntaxHighlighter(private val context: Context) {
     }
 
     private fun highlightNumbers(spannable: SpannableStringBuilder, config: SyntaxConfig) {
-        val numberColor = Color.parseColor(config.colors.number)
+        val numberColor = try {
+            Color.parseColor(config.colors.number)
+        } catch (e: Exception) {
+            Color.parseColor("#e91e63")
+        }
+
         val pattern = Pattern.compile("\\b\\d+(\\.\\d+)?[fFdDlL]?\\b")
         val matcher = pattern.matcher(spannable)
 

@@ -967,7 +967,10 @@ class MainActivity : AppCompatActivity() {
     private fun updateCompilationStatus(result: CompilationResult) {
         updateAdbCompilationStatus(result)
     }
-
+    fun refreshSyntaxHighlighting() {
+        // Re-apply syntax highlighting with current filename
+        syntaxHighlighter.applySyntaxHighlighting(binding.editorText, currentFilename)
+    }
     override fun onDestroy() {
         super.onDestroy()
         adbCompilerManager.cleanup()
