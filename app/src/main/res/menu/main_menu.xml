@@ -10,6 +10,11 @@
         app:showAsAction="never" />
 
     <item
+        android:id="@+id/action_create_sample"
+        android:title="Create Sample File"
+        android:showAsAction="never" />
+
+    <item
         android:id="@+id/action_open"
         android:title="Open"
         android:icon="@android:drawable/ic_menu_upload"
@@ -64,11 +69,6 @@
         android:id="@+id/action_compile_run"
         android:title="Compile and Run"
         android:icon="@drawable/ic_compile_run" />
-
-    <item
-        android:id="@+id/action_online_compile"
-        android:title="Online Compile"
-        android:icon="@drawable/ic_cloud" />
 
     <!-- Settings Menu -->
     <item

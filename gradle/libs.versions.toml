@@ -14,6 +14,8 @@ documentfile = "1.0.1"
 okhttp = "4.12.0"
 json = "20230227"
 coroutines = "1.7.3"
+commons-io = "2.11.0"
+
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -30,7 +32,7 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 json = { group = "org.json", name = "json", version.ref = "json" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
-
+commons-io = { module = "commons-io:commons-io", version.ref = "commons-io" }
 
 
 [plugins]
